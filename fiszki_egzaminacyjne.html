@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Fiszki egzaminacyjne</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="app">
+  <h2 class="sr-only" style="position:absolute;left:-9999px">Fiszki egzaminacyjne</h2>
+  <div class="progress-bar-wrap"><div class="progress-bar" id="pbar"></div></div>
+  <div class="meta"><span id="meta-left">Pytanie <strong id="cur">1</strong> z 30</span><span id="meta-right"></span></div>
+
+  <div class="card-scene" id="scene">
+    <div class="card-inner" id="inner">
+      <div class="card-face card-front">
+        <div id="qtag"></div>
+        <div class="q-num" id="qnum"></div>
+        <div class="q-text" id="qtext"></div>
+        <div class="hint">Kliknij kartę, aby odwrócić (lub przesuń w bok)</div>
+      </div>
+      <div class="card-face card-back">
+        <div class="a-label">Odpowiedź</div>
+        <div class="a-text" id="atext"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="controls" id="main-controls">
+    <button class="btn" onclick="swipeLeft()">❌ Nie znam</button>
+    <button class="btn accent" onclick="swipeRight()">✓ Znam</button>
+  </div>
+  <div class="nav" id="nav-controls">
+    <button class="btn" onclick="goActive(-1)">← Poprzednia</button>
+    <button class="btn" onclick="goActive(1)">Następna →</button>
+  </div>
+  <div class="jump-wrap">
+    <input type="number" id="jumpinput" min="1" max="30" placeholder="Nr" />
+    <button class="btn" onclick="jumpTo()">Przejdź</button>
+    <button class="btn" onclick="shuffleActive()" style="flex:none;">🔀 Losuj</button>
+    <button class="btn" onclick="resetAll()" style="flex:none; color:var(--color-text-danger); border-color:var(--color-border-tertiary);">Resetuj</button>
+  </div>
+</div>
+
+<script src="data.js"></script>
+<script src="script.js"></script>
+</body>
+</html>

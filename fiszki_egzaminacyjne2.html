@@ -1,0 +1,553 @@
+
+<style>
+  :root { --card-h: 320px; }
+  .app { padding: 1rem 0; font-family: var(--font-sans); }
+  .progress-bar-wrap { background: var(--color-border-tertiary); border-radius: 99px; height: 4px; margin-bottom: 1rem; }
+  .progress-bar { height: 4px; border-radius: 99px; background: var(--color-text-info, #378ADD); transition: width 0.3s; }
+  .meta { display: flex; justify-content: space-between; align-items: center; font-size: 13px; color: var(--color-text-secondary); margin-bottom: 1rem; }
+  .card-scene { perspective: 1000px; height: var(--card-h); cursor: pointer; user-select: none; }
+  .card-inner { position: relative; width: 100%; height: 100%; transform-style: preserve-3d; transition: transform 0.5s cubic-bezier(.4,0,.2,1); }
+  .card-inner.flipped { transform: rotateY(180deg); }
+  .card-face { position: absolute; inset: 0; border-radius: var(--border-radius-lg); border: 0.5px solid var(--color-border-tertiary); padding: 1.5rem; display: flex; flex-direction: column; backface-visibility: hidden; overflow: hidden; }
+  .card-front { background: var(--color-background-primary); justify-content: center; align-items: center; text-align: center; }
+  .card-back { background: var(--color-background-secondary); transform: rotateY(180deg); overflow-y: auto; }
+  .q-num { font-size: 12px; color: var(--color-text-tertiary); margin-bottom: 0.5rem; }
+  .q-text { font-size: 17px; font-weight: 500; color: var(--color-text-primary); line-height: 1.5; }
+  .hint { font-size: 12px; color: var(--color-text-tertiary); margin-top: 1.5rem; }
+  .a-label { font-size: 11px; font-weight: 500; color: var(--color-text-tertiary); letter-spacing: .05em; text-transform: uppercase; margin-bottom: 0.75rem; }
+  .a-text { font-size: 14px; color: var(--color-text-primary); line-height: 1.65; }
+  .a-text ul { margin: 0.4rem 0 0.4rem 1.2rem; padding: 0; }
+  .a-text li { margin-bottom: 0.25rem; }
+  .a-text strong { font-weight: 500; }
+  .controls { display: flex; gap: 8px; margin-top: 1rem; }
+  .btn { flex: 1; padding: 10px; border: 0.5px solid var(--color-border-secondary); border-radius: var(--border-radius-md); background: transparent; font-size: 14px; color: var(--color-text-primary); cursor: pointer; }
+  .btn:hover { background: var(--color-background-secondary); }
+  .btn.accent { background: var(--color-background-info); color: var(--color-text-info); border-color: transparent; }
+  .nav { display: flex; gap: 8px; margin-top: 0.5rem; }
+  .nav .btn { font-size: 18px; }
+  .jump-wrap { margin-top: 0.75rem; display: flex; gap: 8px; align-items: center; }
+  .jump-wrap input { width: 60px; padding: 6px 8px; border: 0.5px solid var(--color-border-secondary); border-radius: var(--border-radius-md); background: var(--color-background-primary); color: var(--color-text-primary); font-size: 14px; text-align: center; }
+  .jump-wrap .btn { flex: none; padding: 6px 14px; }
+  .tag { display: inline-block; font-size: 11px; padding: 2px 8px; border-radius: 99px; margin-bottom: 0.75rem; background: var(--color-background-info); color: var(--color-text-info); }
+</style>
+
+<div class="app">
+  <h2 class="sr-only" style="position:absolute;left:-9999px">Fiszki egzaminacyjne – 30 pytań</h2>
+  <div class="progress-bar-wrap"><div class="progress-bar" id="pbar"></div></div>
+  <div class="meta"><span id="meta-left">Pytanie <strong id="cur">1</strong> z 30</span><span id="meta-right"></span></div>
+
+  <div class="card-scene" id="scene" onclick="flip()">
+    <div class="card-inner" id="inner">
+      <div class="card-face card-front">
+        <div class="q-num" id="qnum"></div>
+        <div class="q-text" id="qtext"></div>
+        <div class="hint">kliknij, aby zobaczyć odpowiedź</div>
+      </div>
+      <div class="card-face card-back">
+        <div class="a-label">Odpowiedź</div>
+        <div class="a-text" id="atext"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="controls">
+    <button class="btn" onclick="mark('again')">🔄 Jeszcze raz</button>
+    <button class="btn accent" onclick="mark('know')">✓ Znam</button>
+  </div>
+  <div class="nav">
+    <button class="btn" onclick="go(-1)">← Poprzednia</button>
+    <button class="btn" onclick="go(1)">Następna →</button>
+  </div>
+  <div class="jump-wrap">
+    <input type="number" id="jumpinput" min="1" max="30" placeholder="#" />
+    <button class="btn" onclick="jumpTo()">Przejdź</button>
+    <button class="btn" onclick="shuffle()" style="flex:none;padding:6px 14px">🔀 Losuj</button>
+    <button class="btn" onclick="resetAll()" style="flex:none;padding:6px 14px;color:var(--color-text-danger)">Resetuj</button>
+  </div>
+</div>
+
+<script>
+const cards = [
+  {
+    q: "Składowe modelu e-biznesowego według Laudona i Travera",
+    tag: "E-biznes",
+    a: `Model e-biznesowy wg Laudona i Travera składa się z 8 kluczowych elementów:
+<ul>
+<li><strong>Propozycja wartości</strong> – co oferujemy klientom i dlaczego mają wybrać nas</li>
+<li><strong>Model przychodów</strong> – sposób generowania zysku (reklama, subskrypcja, transakcja, afiliacja, sprzedaż)</li>
+<li><strong>Możliwość rynkowa</strong> – przestrzeń rynkowa i jej potencjał</li>
+<li><strong>Środowisko konkurencyjne</strong> – inni gracze na rynku</li>
+<li><strong>Przewaga konkurencyjna</strong> – unikalne zasoby lub zdolności</li>
+<li><strong>Strategia rynkowa</strong> – plan dotarcia i zdobycia klientów</li>
+<li><strong>Rozwój organizacyjny</strong> – struktury i talenty potrzebne do realizacji planu</li>
+<li><strong>Zespół zarządzający</strong> – doświadczeni menedżerowie realizujący model</li>
+</ul>`
+  },
+  {
+    q: "Miękkie podejście systemowe w projektowaniu systemów informacyjnych",
+    tag: "Systemy IS",
+    a: `<strong>Metodologia miękkich systemów (SSM)</strong> – opracowana przez Petera Checklanda jako odpowiedź na ograniczenia twardego podejścia inżynierskiego.
+<ul>
+<li>Stosowana gdy problem jest słabo ustrukturyzowany, a cele niejednoznaczne</li>
+<li><strong>7 kroków SSM:</strong> rozpoznanie sytuacji → wyrażenie problemu → formułowanie definicji systemu (CATWOE) → budowanie modeli konceptualnych → porównanie z rzeczywistością → identyfikacja pożądanych zmian → podjęcie działań</li>
+<li><strong>CATWOE:</strong> Customers, Actors, Transformation, Weltanschauung (światopogląd), Owner, Environment</li>
+<li>Uwzględnia perspektywy różnych interesariuszy i aspekty społeczno-kulturowe</li>
+<li>Iteracyjny, nielinearny proces uczenia się</li>
+</ul>`
+  },
+  {
+    q: "Geneza i ewolucja systemów ERP",
+    tag: "ERP",
+    a: `<strong>Ewolucja ERP:</strong>
+<ul>
+<li><strong>Lata 60. – MRP I</strong> (Material Requirements Planning): planowanie potrzeb materiałowych, harmonogramowanie produkcji</li>
+<li><strong>Lata 70. – MRP II</strong> (Manufacturing Resource Planning): rozszerzenie o zasoby finansowe i produkcyjne</li>
+<li><strong>Lata 90. – ERP</strong> (Enterprise Resource Planning): integracja wszystkich funkcji przedsiębiorstwa w jednej bazie danych (finanse, HR, logistyka, sprzedaż)</li>
+<li><strong>Lata 2000. – ERP II</strong>: rozszerzenie na łańcuch dostaw, CRM, BI, integracja z partnerami</li>
+<li><strong>Współcześnie – Cloud ERP</strong>: SaaS, modele subskrypcyjne, AI/ML wbudowane w procesy (np. SAP S/4HANA, Oracle Fusion)</li>
+</ul>`
+  },
+  {
+    q: "Podejścia do zarządzania w okresie przednaukowym oraz naukowym – od F.W. Taylora do czasów obecnych",
+    tag: "Zarządzanie",
+    a: `<strong>Okres przednaukowy:</strong> zarządzanie oparte na intuicji, tradycji i doświadczeniu (rzemiosło, cechy, merkantylizm).
+<br><br><strong>Szkoła naukowego zarządzania:</strong>
+<ul>
+<li><strong>Taylor</strong> – badania czasu i ruchu, specjalizacja, normy wydajności</li>
+<li><strong>Fayol</strong> – 14 zasad zarządzania, funkcje: planowanie/organizowanie/kierowanie/kontrola</li>
+<li><strong>Weber</strong> – biurokracja jako racjonalny model organizacji</li>
+</ul>
+<strong>Szkoła stosunków międzyludzkich:</strong> Mayo (eksperymenty w Hawthorne) – rola relacji i motywacji.
+<br><strong>Szkoła systemowa i sytuacyjna:</strong> organizacja jako otwarty system, brak jednego najlepszego sposobu.
+<br><strong>Współczesność:</strong> lean management, agile, zarządzanie wiedzą, CSR, zarządzanie przez wartości.`
+  },
+  {
+    q: "Typowe sposoby rozumienia organizacji, modele organizacji oraz typologie",
+    tag: "Organizacja",
+    a: `<strong>Sposoby rozumienia organizacji:</strong>
+<ul>
+<li>Organizacja jako <strong>system społeczno-techniczny</strong></li>
+<li>Organizacja jako <strong>koalicja interesów</strong> (Cyert, March)</li>
+<li>Metafory Morgana: maszyna, organizm, mózg, kultura, polityka, więzienie psychiczne</li>
+</ul>
+<strong>Modele:</strong>
+<ul>
+<li>Model <strong>mechanistyczny</strong> (biurokratyczny) – formalizacja, hierarchia</li>
+<li>Model <strong>organiczny</strong> – elastyczność, decentralizacja</li>
+<li>Model <strong>sieciowy</strong> – partnerstwa i alianse</li>
+</ul>
+<strong>Typologie:</strong> wg Mintzeberga (prosta, biurokracja maszynowa, profesjonalna, dywizjonalna, adhokracja), wg kryterium własności (publiczne/prywatne/NGO), wg celów (produkcja, usługi, nonprofit).`
+  },
+  {
+    q: "Pojęcie systemu informacyjnego",
+    tag: "Systemy IS",
+    a: `<strong>System informacyjny (SI)</strong> – zbiór wzajemnie powiązanych elementów służących zbieraniu, przetwarzaniu, przechowywaniu i dystrybucji informacji wspomagających podejmowanie decyzji i kontrolę w organizacji.
+<br><br><strong>Elementy SI:</strong>
+<ul>
+<li><strong>Dane wejściowe</strong> – pozyskiwanie surowych danych</li>
+<li><strong>Przetwarzanie</strong> – transformacja danych w informacje</li>
+<li><strong>Dane wyjściowe</strong> – prezentacja wyników użytkownikom</li>
+<li><strong>Sprzężenie zwrotne</strong> – ocena i korekta</li>
+</ul>
+<strong>Wymiary SI:</strong> organizacyjny (procesy, kultura), zarządczy (decyzje, strategie), technologiczny (sprzęt, oprogramowanie, sieć, bazy danych). Podejście socjotechniczne zakłada, że SI to ludzie + technologia + procesy.`
+  },
+  {
+    q: "Fazy tworzenia (cyklu życia) systemu informacyjnego",
+    tag: "Systemy IS",
+    a: `<strong>SDLC – System Development Life Cycle:</strong>
+<ul>
+<li><strong>Planowanie</strong> – określenie potrzeby, analiza wykonalności, harmonogram</li>
+<li><strong>Analiza</strong> – zbieranie wymagań, modele procesów (DFD, UML), analiza As-Is/To-Be</li>
+<li><strong>Projektowanie</strong> – architektura systemu, projekt logiczny i fizyczny, interfejsy, bazy danych</li>
+<li><strong>Implementacja</strong> – kodowanie, testy jednostkowe i integracyjne</li>
+<li><strong>Wdrożenie</strong> – szkolenia, migracja danych, uruchomienie produkcyjne</li>
+<li><strong>Utrzymanie</strong> – poprawki, aktualizacje, ewolucja systemu</li>
+</ul>
+Podejścia: kaskadowe, iteracyjne, spiralne, Agile (Scrum/Kanban).`
+  },
+  {
+    q: "Istota, rodzaje i przykłady integracji systemów",
+    tag: "Systemy IS",
+    a: `<strong>Integracja systemów</strong> – łączenie odrębnych systemów IT w spójną całość wymieniającą dane i procesy.
+<br><br><strong>Rodzaje integracji:</strong>
+<ul>
+<li><strong>Integracja danych</strong> – ETL, hurtownie danych, replikacja (np. integracja CRM z ERP)</li>
+<li><strong>Integracja procesów</strong> – automatyzacja przepływów między systemami (workflow)</li>
+<li><strong>Integracja aplikacji (EAI)</strong> – middleware, ESB (Enterprise Service Bus)</li>
+<li><strong>Integracja usług (SOA/Mikrousługi)</strong> – API REST/SOAP, orkiestracja</li>
+<li><strong>Integracja prezentacji</strong> – portale, mashup UI</li>
+</ul>
+<strong>Przykłady:</strong> SAP + Salesforce przez API, EDI między dostawcą a detalistą, integracja sklepu WooCommerce z Allegro przez middleware.`
+  },
+  {
+    q: "Relacje w relacyjnym modelu danych",
+    tag: "Bazy danych",
+    a: `W relacyjnym modelu danych <strong>relacja</strong> to dwuwymiarowa tabela złożona z krotek (wierszy) i atrybutów (kolumn).
+<br><br><strong>Typy relacji między encjami:</strong>
+<ul>
+<li><strong>1:1</strong> – jeden rekord powiązany z dokładnie jednym (np. osoba – paszport)</li>
+<li><strong>1:N</strong> – jeden rekord powiązany z wieloma (np. klient – zamówienia)</li>
+<li><strong>M:N</strong> – wiele z wieloma, realizowane przez tabelę pośrednią (np. student – kurs)</li>
+</ul>
+<strong>Klucze:</strong>
+<ul>
+<li><strong>Klucz główny (PK)</strong> – unikalny identyfikator rekordu, NOT NULL</li>
+<li><strong>Klucz obcy (FK)</strong> – referencja do PK innej tabeli, zapewnia integralność referencyjną</li>
+<li><strong>Klucz kandydujący</strong> – atrybut/zestaw atrybutów mogący pełnić rolę PK</li>
+</ul>`
+  },
+  {
+    q: "Elementy zapytań wybierających w bazach danych",
+    tag: "Bazy danych",
+    a: `Zapytanie SELECT składa się z klauzul (kolejność wykonania w nawiasach):
+<ul>
+<li><strong>SELECT</strong> (5) – lista kolumn lub wyrażeń do zwrócenia; <code>*</code> = wszystkie</li>
+<li><strong>FROM</strong> (1) – tabele źródłowe</li>
+<li><strong>JOIN ... ON</strong> (2) – łączenie tabel (INNER, LEFT, RIGHT, FULL, CROSS)</li>
+<li><strong>WHERE</strong> (3) – filtrowanie wierszy przed grupowaniem</li>
+<li><strong>GROUP BY</strong> (4) – grupowanie wierszy dla funkcji agregujących (SUM, COUNT, AVG, MAX, MIN)</li>
+<li><strong>HAVING</strong> (4b) – filtrowanie grup (po agregacji)</li>
+<li><strong>ORDER BY</strong> (6) – sortowanie wyników (ASC/DESC)</li>
+<li><strong>LIMIT / TOP / FETCH</strong> (7) – ograniczenie liczby zwróconych wierszy</li>
+</ul>
+Podzapytania (subquery) mogą wystąpić w SELECT, FROM lub WHERE.`
+  },
+  {
+    q: "Instrukcje funkcjonalne języka SQL",
+    tag: "Bazy danych",
+    a: `SQL dzieli się na kilka kategorii instrukcji:
+<ul>
+<li><strong>DDL</strong> (Data Definition Language): <code>CREATE</code>, <code>ALTER</code>, <code>DROP</code>, <code>TRUNCATE</code> – definiowanie struktury obiektów</li>
+<li><strong>DML</strong> (Data Manipulation Language): <code>SELECT</code>, <code>INSERT</code>, <code>UPDATE</code>, <code>DELETE</code> – operacje na danych</li>
+<li><strong>DCL</strong> (Data Control Language): <code>GRANT</code>, <code>REVOKE</code> – zarządzanie uprawnieniami</li>
+<li><strong>TCL</strong> (Transaction Control Language): <code>COMMIT</code>, <code>ROLLBACK</code>, <code>SAVEPOINT</code> – zarządzanie transakcjami (ACID)</li>
+</ul>
+<strong>Funkcje wbudowane:</strong> tekstowe (<code>UPPER</code>, <code>SUBSTR</code>, <code>CONCAT</code>), numeryczne (<code>ROUND</code>, <code>MOD</code>), datowe (<code>NOW</code>, <code>DATEDIFF</code>), agregujące (<code>SUM</code>, <code>COUNT</code>, <code>AVG</code>).`
+  },
+  {
+    q: "Metodyki, praktyki i narzędzia do wytwarzania oprogramowania",
+    tag: "Inżynieria oprog.",
+    a: `<strong>Metodyki:</strong>
+<ul>
+<li><strong>Kaskadowa (Waterfall)</strong> – liniowa, fazy bez powrotu</li>
+<li><strong>Agile</strong> – iteracyjna, Scrum (sprinty, backlog, retrospektywy), Kanban</li>
+<li><strong>RUP</strong> – iteracyjna, fazy: rozpoczęcie, opracowanie, budowanie, przekazanie</li>
+<li><strong>Spiralna</strong> – analiza ryzyka w każdym cyklu</li>
+</ul>
+<strong>Praktyki:</strong> TDD, BDD, CI/CD, code review, pair programming, refactoring, DevOps.
+<br><strong>Narzędzia:</strong>
+<ul>
+<li>Zarządzanie projektem: Jira, Trello, Azure DevOps</li>
+<li>Kontrola wersji: Git (GitHub, GitLab)</li>
+<li>CI/CD: Jenkins, GitHub Actions, GitLab CI</li>
+<li>Testowanie: JUnit, Selenium, Postman</li>
+<li>IDE: VS Code, IntelliJ IDEA</li>
+</ul>`
+  },
+  {
+    q: "Różnorodność podejść, poziomów i technik testowania oprogramowania",
+    tag: "Inżynieria oprog.",
+    a: `<strong>Poziomy testowania:</strong>
+<ul>
+<li><strong>Testy jednostkowe (Unit)</strong> – izolowane funkcje/klasy; JUnit, pytest</li>
+<li><strong>Testy integracyjne</strong> – współpraca modułów/serwisów</li>
+<li><strong>Testy systemowe</strong> – cały system wobec wymagań</li>
+<li><strong>Testy akceptacyjne (UAT)</strong> – weryfikacja przez klienta</li>
+</ul>
+<strong>Techniki:</strong>
+<ul>
+<li><strong>Black-box</strong> – testowanie na podstawie specyfikacji (klas równoważności, wartości granicznych)</li>
+<li><strong>White-box</strong> – testowanie na podstawie kodu (pokrycie gałęzi, ścieżek)</li>
+<li><strong>Grey-box</strong> – połączenie obu</li>
+</ul>
+<strong>Rodzaje testów:</strong> regresyjne, wydajnościowe (load, stress), bezpieczeństwa (penetration testing), eksploracyjne, smoke tests, A/B testing.`
+  },
+  {
+    q: "Modele warstwowe sieci komputerowych: ISO OSI, TCP/IP oraz IEEE 802.2",
+    tag: "Sieci",
+    a: `<strong>Model ISO OSI (7 warstw):</strong> Fizyczna → Łącza danych → Sieciowa → Transportowa → Sesji → Prezentacji → Aplikacji.
+<br><br><strong>Model TCP/IP (4 warstwy):</strong>
+<ul>
+<li>Dostępu do sieci (≈ OSI 1+2)</li>
+<li>Internetowa (IP, ICMP) – ≈ OSI 3</li>
+<li>Transportowa (TCP, UDP) – ≈ OSI 4</li>
+<li>Aplikacji (HTTP, DNS, SMTP) – ≈ OSI 5+6+7</li>
+</ul>
+<strong>IEEE 802.2 (LLC)</strong> – podwarstwa sterowania łączem logicznym w warstwie łącza danych. Zapewnia multipleksowanie protokołów sieciowych nad różnymi standardami warstwy fizycznej (802.3 Ethernet, 802.11 Wi-Fi). Definiuje ramki z polami DSAP i SSAP identyfikującymi protokół wyższej warstwy.`
+  },
+  {
+    q: "Adresacja IPv4 versus IPv6 – podobieństwa i różnice, konwencje notacyjne",
+    tag: "Sieci",
+    a: `<strong>IPv4:</strong> 32-bitowy adres, zapis dziesiętny z kropkami: <code>192.168.1.1</code>. Maks. ~4,3 mld adresów. Klasy A/B/C/D/E, maska podsieci (np. /24), NAT, DHCP.
+<br><br><strong>IPv6:</strong> 128-bitowy adres, zapis szesnastkowy z dwukropkami: <code>2001:0db8:85a3::8a2e:0370:7334</code>. Ogromna przestrzeń (3,4×10³⁸). Brak potrzeby NAT.
+<br><br><strong>Konwencje IPv6:</strong> pomijanie zer wiodących w grupach, zastąpienie jednej grupy kolejnych zer przez <code>::</code> (tylko raz).
+<br><br><strong>Podobieństwa:</strong> identyfikacja hosta i sieci, prefiksy CIDR (np. /64), routing pakietów, protokoły wyższych warstw działają tak samo.
+<br><strong>Różnice:</strong> nagłówek IPv6 jest prostszy (stała długość), wbudowane IPsec i autokonfiguracja SLAAC, multicast zamiast broadcast, typy adresów: unicast, anycast, multicast.`
+  },
+  {
+    q: "Idea programowania komputerów oraz paradygmaty programowania",
+    tag: "Programowanie",
+    a: `<strong>Idea programowania</strong> – instruowanie komputera poprzez formalne języki do rozwiązywania problemów; abstrakcja między logiką a sprzętem.
+<br><br><strong>Paradygmaty:</strong>
+<ul>
+<li><strong>Imperatywny</strong> – sekwencja instrukcji modyfikujących stan (C, Pascal)</li>
+<li><strong>Proceduralny</strong> – podprogram/funkcja jako jednostka; struktury sterujące (C, Python)</li>
+<li><strong>Obiektowy (OOP)</strong> – klasy, obiekty, hermetyzacja, dziedziczenie, polimorfizm (Java, C++, Python)</li>
+<li><strong>Funkcyjny</strong> – funkcje czyste, niemutowalność, HOF, bez efektów ubocznych (Haskell, Erlang, Clojure)</li>
+<li><strong>Deklaratywny</strong> – opisujemy co, nie jak (SQL, HTML, Prolog)</li>
+<li><strong>Reaktywny / zdarzeniowy</strong> – strumienie danych, asynchroniczność (RxJS)</li>
+</ul>`
+  },
+  {
+    q: "Systemy kontroli wersji i ich zastosowanie",
+    tag: "Inżynieria oprog.",
+    a: `<strong>System kontroli wersji (VCS)</strong> – narzędzie śledzące zmiany w plikach w czasie, umożliwiające cofanie zmian, współpracę i rozgałęzianie pracy.
+<br><br><strong>Rodzaje:</strong>
+<ul>
+<li><strong>Lokalny (LVCS)</strong> – historia tylko na dysku lokalnym</li>
+<li><strong>Scentralizowany (CVCS)</strong> – jeden serwer (SVN, CVS)</li>
+<li><strong>Rozproszony (DVCS)</strong> – każdy klon to pełne repozytorium (Git, Mercurial)</li>
+</ul>
+<strong>Git – podstawowe pojęcia:</strong> commit, branch, merge, rebase, pull request, stash, tag.
+<br><strong>Zastosowania:</strong> wersjonowanie kodu źródłowego, dokumentacji, plików konfiguracyjnych; code review (GitHub/GitLab); CI/CD pipelines; audyt zmian; rollback; współpraca zespołowa (branching strategies: GitFlow, trunk-based development).`
+  },
+  {
+    q: "Abstrakcja jako centralny motyw projektowania oprogramowania",
+    tag: "Programowanie",
+    a: `<strong>Abstrakcja</strong> – ukrywanie szczegółów implementacji i eksponowanie tylko istotnego interfejsu. Pozwala zarządzać złożonością.
+<br><br><strong>Rodzaje abstrakcji w oprogramowaniu:</strong>
+<ul>
+<li><strong>Proceduralna</strong> – funkcje i procedury ukrywają sekwencje instrukcji</li>
+<li><strong>Danych</strong> – klasy i typy abstrakcyjne (ADT) ukrywają reprezentację wewnętrzną</li>
+<li><strong>Sterowania</strong> – pętle, iteratory, wyjątki</li>
+<li><strong>Modułowa</strong> – podział systemu na niezależne moduły/pakiety</li>
+<li><strong>Architektoniczna</strong> – wzorce (MVC, Microservices, layered architecture)</li>
+</ul>
+<strong>Zasady wspierające abstrakcję:</strong> hermetyzacja (OOP), interfejsy i klasy abstrakcyjne, wzorce projektowe (Facade, Adapter, Strategy), zasady SOLID (szczególnie OCP i DIP).`
+  },
+  {
+    q: "Technologie programistyczne wykorzystywane w architekturze trójwarstwowej",
+    tag: "Programowanie",
+    a: `<strong>Architektura trójwarstwowa:</strong>
+<ul>
+<li><strong>Warstwa prezentacji (frontend)</strong>: HTML5, CSS3, JavaScript, frameworki (React, Vue, Angular), TypeScript; komunikacja przez REST API / GraphQL</li>
+<li><strong>Warstwa logiki biznesowej (backend)</strong>: Node.js (Express), Python (Django, FastAPI), Java (Spring Boot), PHP (Laravel), C# (.NET); autoryzacja (JWT, OAuth2), ORM (Hibernate, SQLAlchemy, Prisma)</li>
+<li><strong>Warstwa danych</strong>: relacyjne bazy (PostgreSQL, MySQL, Oracle), NoSQL (MongoDB, Redis, Cassandra), ORM/migracje, procedury składowane</li>
+</ul>
+<strong>Komunikacja:</strong> HTTP/HTTPS, REST, WebSocket, gRPC. <strong>Konteneryzacja:</strong> Docker + Kubernetes dla separacji warstw. <strong>Wzorzec MVC</strong> realizuje tę architekturę na poziomie aplikacji.`
+  },
+  {
+    q: "Framework a biblioteka, własności wybranego frameworka",
+    tag: "Programowanie",
+    a: `<strong>Biblioteka</strong> – zbiór funkcji/klas wywołanych przez kod programisty w dowolnym momencie (np. lodash, NumPy). Kontrola przepływu po stronie programisty.
+<br><br><strong>Framework</strong> – szkielet aplikacji definiujący architekturę i przepływ sterowania; kod programisty wypełnia z góry określone miejsca (<em>Inversion of Control</em>, IoC). Przykłady: Django, Spring Boot, Angular, Laravel.
+<br><br><strong>Przykład – Spring Boot (Java):</strong>
+<ul>
+<li>Autokonfiguracja – minimalna konfiguracja ręczna</li>
+<li>Wstrzykiwanie zależności (DI) – zarządzanie komponentami przez kontener IoC</li>
+<li>Starter dependencies – gotowe zestawy bibliotek (spring-boot-starter-web)</li>
+<li>Embedded server – wbudowany Tomcat/Jetty, brak potrzeby deploy do serwera zewnętrznego</li>
+<li>Actuator – monitorowanie i zarządzanie aplikacją w runtime</li>
+</ul>`
+  },
+  {
+    q: "Programowanie w asemblerze (instrukcje, składnia, struktura, obszary zastosowań, zalety, wady)",
+    tag: "Programowanie",
+    a: `<strong>Asembler</strong> – język niskiego poziomu, jeden krok nad kodem maszynowym; każda instrukcja ≈ jedna operacja procesora.
+<br><br><strong>Składnia (x86 Intel):</strong> <code>MOV AX, 5</code> | <code>ADD AX, BX</code> | <code>JMP etykieta</code>
+<br><strong>Struktura programu:</strong> sekcja danych (<code>.data</code>), kodu (<code>.text</code>), etykiety, makra, dyrektywy.
+<br><strong>Instrukcje:</strong> przenoszenia danych (MOV, PUSH, POP), arytmetyczne (ADD, SUB, MUL, DIV), logiczne (AND, OR, XOR, NOT), skoku (JMP, JE, JNE, CALL, RET), wejścia/wyjścia (INT, IN, OUT).
+<br><br><strong>Zastosowania:</strong> sterowniki, BIOS/UEFI, bootloadery, optymalizacja krytycznych pętli, embedded, exploity.
+<br><strong>Zalety:</strong> pełna kontrola nad sprzętem, maksymalna wydajność, minimalny narzut.
+<br><strong>Wady:</strong> brak przenośności, trudny w utrzymaniu, podatność na błędy, długi czas tworzenia.`
+  },
+  {
+    q: "Maszynowa reprezentacja informacji (sposoby reprezentacji liczb, tekstów i grafiki)",
+    tag: "Architektura komp.",
+    a: `<strong>Liczby całkowite:</strong>
+<ul>
+<li>Bez znaku (unsigned): kod binarny naturalny</li>
+<li>Ze znakiem: U2 (uzupełnienie do dwóch) – dominujące; bit znaku + reszta</li>
+</ul>
+<strong>Liczby zmiennoprzecinkowe:</strong> standard IEEE 754; float32: 1 bit znaku, 8 exp, 23 mantys; double64: 1+11+52.
+<br><br><strong>Tekst:</strong>
+<ul>
+<li><strong>ASCII</strong> – 7-bitowy, 128 znaków, tylko łacina podstawowa</li>
+<li><strong>Latin-1 (ISO-8859-1)</strong> – 8-bitowy, rozszerzenie ASCII</li>
+<li><strong>Unicode + UTF-8</strong> – zmienna długość (1–4 bajty), kompatybilny z ASCII, obsługuje wszystkie języki; dominujący standard</li>
+<li><strong>UTF-16, UTF-32</strong> – stała/pół-stała szerokość</li>
+</ul>
+<strong>Grafika rastrowa:</strong> piksele z wartościami kanałów RGB/RGBA (8 lub 16 bpp); metadane, kompresja (JPEG stratna, PNG bezstratna). <strong>Wektorowa:</strong> matematyczny opis kształtów (SVG, PDF). <strong>Grafika 3D:</strong> siatki wielokątów, normalne, UV-mapy.`
+  },
+  {
+    q: "Uwarunkowania osiągania zysku w okresie krótkim i długim",
+    tag: "Ekonomia",
+    a: `<strong>Zysk = Przychody – Koszty</strong>
+<br><br><strong>Okres krótki:</strong>
+<ul>
+<li>Część czynników stała (np. kapitał, budynki) → koszty stałe nieelastyczne</li>
+<li>Prawo malejących przychodów krańcowych ogranicza produkcję</li>
+<li>Firma może produkować przy stracie (o ile P ≥ AVC – pokrycie kosztów zmiennych)</li>
+<li>Warunek max. zysku: <strong>MR = MC</strong> (przychód krańcowy = koszt krańcowy)</li>
+</ul>
+<strong>Okres długi:</strong>
+<ul>
+<li>Wszystkie czynniki zmienne → możliwość zmiany skali produkcji</li>
+<li>Efekty skali (rosnące, stałe, malejące)</li>
+<li>W konkurencji doskonałej: długookresowo P = AC (zysk ekonomiczny = 0)</li>
+<li>Zysk trwały możliwy przy: monopolu, innowacjach, barierach wejścia, unikalnych zasobach</li>
+</ul>`
+  },
+  {
+    q: "Zjawisko inflacji w gospodarce – metody przeciwdziałania nadmiernemu wzrostowi inflacji",
+    tag: "Ekonomia",
+    a: `<strong>Inflacja</strong> – trwały wzrost ogólnego poziomu cen → spadek siły nabywczej pieniądza. Mierzona CPI lub PPI.
+<br><br><strong>Rodzaje:</strong> pełzająca (<3%), krocząca (3–10%), galopująca, hiperinflacja. Przyczyny: popytowa (excess demand), kosztowa (cost-push), monetarna (zbyt duża podaż pieniądza), importowana.
+<br><br><strong>Metody przeciwdziałania:</strong>
+<ul>
+<li><strong>Polityka monetarna (bank centralny):</strong> podwyżka stóp procentowych (droższy kredyt → mniej popytu), operacje otwartego rynku (sprzedaż obligacji → absorpcja pieniądza), podniesienie rezerw obowiązkowych</li>
+<li><strong>Polityka fiskalna (rząd):</strong> cięcia wydatków publicznych, podwyżki podatków → redukcja popytu</li>
+<li><strong>Regulacje cenowe</strong> – tymczasowe zamrożenia cen (rzadko, skutki uboczne)</li>
+<li><strong>Polityka dochodowa</strong> – ograniczenie wzrostu płac</li>
+</ul>`
+  },
+  {
+    q: "Formaty przechowywania danych w plikach tekstowych",
+    tag: "Dane",
+    a: `<strong>Popularne formaty tekstowe:</strong>
+<ul>
+<li><strong>CSV</strong> (Comma-Separated Values) – dane tabelaryczne, separator (,/;/tab), opcjonalne nagłówki; prosty, szeroko obsługiwany</li>
+<li><strong>JSON</strong> (JavaScript Object Notation) – obiekty ({}) i tablice ([]), typy: string, number, boolean, null; używany w API REST i konfiguracjach</li>
+<li><strong>XML</strong> – hierarchia tagów, atrybuty, namespace; verbose, ale bardzo elastyczny; SOAP, konfiguracje Java/Android</li>
+<li><strong>YAML</strong> – czytelny dla człowieka, wcięcia jako struktura; pliki konfiguracyjne (Docker Compose, Kubernetes, CI/CD)</li>
+<li><strong>TOML</strong> – czytelny config (Rust/Cargo, Python/pyproject.toml)</li>
+<li><strong>INI</strong> – sekcje [section], klucz=wartość; proste konfiguracje</li>
+<li><strong>TSV</strong> – jak CSV, tabulator jako separator</li>
+</ul>`
+  },
+  {
+    q: "Idea, cele i korzyści stosowania elektronicznej wymiany danych",
+    tag: "E-biznes",
+    a: `<strong>EDI</strong> (Electronic Data Interchange) – ustrukturyzowana, komputerowa wymiana dokumentów handlowych między organizacjami bez udziału człowieka, przy użyciu uzgodnionych standardów.
+<br><br><strong>Standardy:</strong> EDIFACT (UN, international), ANSI X12 (USA), XML-EDI, RosettaNet.
+<br><br><strong>Cele:</strong>
+<ul>
+<li>Eliminacja papierowej dokumentacji (zamówień, faktur, awizów WZ)</li>
+<li>Automatyzacja procesów zakupowych i logistycznych</li>
+<li>Redukcja błędów i opóźnień w łańcuchu dostaw</li>
+</ul>
+<strong>Korzyści:</strong>
+<ul>
+<li>Przyspieszenie transakcji (minuty zamiast dni)</li>
+<li>Obniżenie kosztów operacyjnych</li>
+<li>Poprawa dokładności danych i audytowalności</li>
+<li>Integracja z systemami ERP (automatyczne przyjęcie faktury)</li>
+<li>Spełnienie wymagań dużych sieci handlowych (Walmart, Lidl)</li>
+</ul>`
+  },
+  {
+    q: "Skrypty powłoki w systemie Linux na przykładzie bash (tworzenie, uruchamianie, możliwości, zastosowanie)",
+    tag: "Linux",
+    a: `<strong>Tworzenie:</strong> plik tekstowy zaczynający się od shebang: <code>#!/bin/bash</code>; rozszerzenie <code>.sh</code> (opcjonalne).
+<br><strong>Uruchamianie:</strong> <code>chmod +x skrypt.sh && ./skrypt.sh</code> lub <code>bash skrypt.sh</code>.
+<br><br><strong>Możliwości:</strong>
+<ul>
+<li>Zmienne: <code>NAME="Jan"</code>; odczyt: <code>$NAME</code> lub <code>${NAME}</code></li>
+<li>Instrukcje sterujące: <code>if/elif/else/fi</code>, <code>for/while/until</code>, <code>case</code></li>
+<li>Funkcje: <code>nazwa() { ... }</code></li>
+<li>Argumenty: <code>$1, $2, $@, $#</code></li>
+<li>Potoki i przekierowania: <code>|, >, >>, 2>&1, <<EOF</code></li>
+<li>Podstawianie poleceń: <code>$(polecenie)</code></li>
+</ul>
+<strong>Zastosowania:</strong> automatyzacja backupów, wdrożeń (deploy), przetwarzanie logów, cron joby, provisioning serwerów, CI/CD pipelines.`
+  },
+  {
+    q: "Prawa dostępu (podstawowe i specjalne) do katalogów i plików w systemie Linux",
+    tag: "Linux",
+    a: `<strong>Podstawowe prawa (rwx):</strong>
+<ul>
+<li><strong>r (4)</strong> – odczyt pliku / listowanie katalogu</li>
+<li><strong>w (2)</strong> – zapis/modyfikacja pliku / tworzenie plików w katalogu</li>
+<li><strong>x (1)</strong> – wykonanie pliku / wejście do katalogu</li>
+</ul>
+Dla 3 grup: właściciel (u), grupa (g), pozostali (o). Zapis ósemkowy np. <code>755</code> = rwxr-xr-x.
+<br><strong>Komendy:</strong> <code>chmod</code>, <code>chown</code>, <code>chgrp</code>, <code>ls -l</code>.
+<br><br><strong>Prawa specjalne:</strong>
+<ul>
+<li><strong>SUID (4xxx)</strong> – plik wykonywany z uprawnieniami właściciela (np. <code>/usr/bin/passwd</code>)</li>
+<li><strong>SGID (2xxx)</strong> – wykonanie z uprawnieniami grupy; w katalogu: nowe pliki dziedziczą grupę</li>
+<li><strong>Sticky bit (1xxx)</strong> – w katalogu: tylko właściciel może usunąć swój plik (np. <code>/tmp</code>)</li>
+</ul>
+<strong>ACL</strong> – rozszerzone listy kontroli dostępu (<code>getfacl</code>, <code>setfacl</code>) dla bardziej szczegółowych uprawnień.`
+  },
+  {
+    q: "Klasy złożoności obliczeniowej algorytmów",
+    tag: "Algorytmy",
+    a: `Złożoność obliczeniowa określa jak rosną zasoby (czas, pamięć) w zależności od rozmiaru wejścia <em>n</em>.
+<br><br><strong>Najważniejsze klasy czasowe (notacja O):</strong>
+<ul>
+<li><strong>O(1)</strong> – stała (dostęp do tablicy)</li>
+<li><strong>O(log n)</strong> – logarytmiczna (binary search)</li>
+<li><strong>O(n)</strong> – liniowa (pętla po tablicy)</li>
+<li><strong>O(n log n)</strong> – liniowo-logarytmiczna (merge sort, heap sort)</li>
+<li><strong>O(n²)</strong> – kwadratowa (bubble sort, zagnieżdżone pętle)</li>
+<li><strong>O(2ⁿ)</strong> – wykładnicza (bruteforce, problem plecakowy)</li>
+<li><strong>O(n!)</strong> – silniowa (permutacje, TSP brute force)</li>
+</ul>
+<strong>Klasy złożoności decyzyjnych:</strong> P, NP, NP-complete, NP-hard, co-NP, PSPACE, EXPTIME. Notacje: O (górna granica), Ω (dolna), Θ (dokładna).`
+  },
+  {
+    q: "Problemy typu P, NP oraz NP-zupełne: charakterystyka i wzajemne relacje",
+    tag: "Algorytmy",
+    a: `<strong>P (Polynomial time)</strong> – problemy decyzyjne rozwiązywalne w czasie wielomianowym przez deterministyczną maszynę Turinga (DM). Przykłady: sortowanie, najkrótsza ścieżka (Dijkstra), MST.
+<br><br><strong>NP (Nondeterministic Polynomial)</strong> – problemy, dla których rozwiązanie można <em>zweryfikować</em> w czasie wielomianowym. DM może je rozwiązać w czasie wykładniczym lub niedeterministyczna MT w czasie wielomianowym. Przykłady: SAT, Hamiltonian Path, Clique.
+<br><br><strong>NP-zupełne (NPC)</strong> – najtrudniejsze problemy w NP: (1) należą do NP, (2) każdy problem NP daje się do nich zredukować w czasie wielomianowym. Jeśli choć jeden NPC ma algorytm wielomianowy → P = NP. Przykłady: 3-SAT (Cook-Levin), TSP, Vertex Cover, Subset Sum.
+<br><br><strong>Relacje:</strong> P ⊆ NP; NPC ⊆ NP; P ∩ NPC = ∅ (chyba że P=NP, co jest otwartym problemem). NP-trudne (NP-hard) mogą nie należeć do NP (nie wymagają weryfikowalności).`
+  }
+];
+
+let idx = 0;
+let isFlipped = false;
+const known = new Set();
+
+function render() {
+  const c = cards[idx];
+  document.getElementById('qnum').textContent = `Pytanie ${idx + 1} / ${cards.length}`;
+  document.getElementById('qtext').textContent = c.q;
+  document.getElementById('atext').innerHTML = c.a;
+  document.getElementById('cur').textContent = idx + 1;
+  document.getElementById('meta-right').textContent = `✓ Znane: ${known.size} / ${cards.length}`;
+  const pct = ((idx + 1) / cards.length * 100).toFixed(0);
+  document.getElementById('pbar').style.width = pct + '%';
+  if (isFlipped) { document.getElementById('inner').classList.remove('flipped'); isFlipped = false; }
+}
+
+function flip() {
+  isFlipped = !isFlipped;
+  document.getElementById('inner').classList.toggle('flipped', isFlipped);
+}
+
+function go(d) {
+  idx = (idx + d + cards.length) % cards.length;
+  render();
+}
+
+function mark(type) {
+  if (type === 'know') { known.add(idx); go(1); }
+  else { known.delete(idx); go(1); }
+}
+
+function shuffle() {
+  idx = Math.floor(Math.random() * cards.length);
+  render();
+}
+
+function jumpTo() {
+  const v = parseInt(document.getElementById('jumpinput').value);
+  if (v >= 1 && v <= cards.length) { idx = v - 1; render(); }
+}
+
+function resetAll() { known.clear(); idx = 0; render(); }
+
+render();
+</script>
